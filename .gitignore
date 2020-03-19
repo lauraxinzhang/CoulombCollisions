@@ -14,3 +14,4 @@
 *.swp
 *.pdf
 *.png
+.ipynb_*
