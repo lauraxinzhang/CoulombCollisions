@@ -27,10 +27,14 @@ def formatAndSave(fig, ax, lines, xlabel, ylabel, legends = None, title = None, 
     if legends == None:
 #       use labels provides by line labels
         leg = ax.legend()
+    elif legends == False:
+        leg = None
     else:
         leg = ax.legend(legends)
-    for lh in leg.legendHandles: 
-        lh.set_alpha(1)
+    
+    if leg != None:
+        for lh in leg.legendHandles: 
+            lh.set_alpha(1)
         
     ax.set_xlabel(xlabel, fontsize = fontsize)
     ax.set_ylabel(ylabel, fontsize = fontsize)
@@ -104,3 +108,11 @@ def vSpaceSnaps(ax, vHist, tslices, tTot):
     return lines
     
     
+def plotConvergence(ax, x_data, y_data):
+    if len(y_data.shape) ==1:
+        lines = ax.scatter(x_data, y_data)
+    else:
+        for i in range(y_data.shape[-1]):
+            lines = ax.scatter(x_data, y_data[:, i])
+        
+    return lines

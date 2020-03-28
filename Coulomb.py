@@ -250,6 +250,8 @@ class Coulomb():
     def energyConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, 
                           integrator = 'EM', fixedWiener = False, silent = False):
         '''
+        Integrates the system over the same length of time, at different dt
+        
         nparts:     number of particles per run
         dt_start:   the lowest order of magnitude for dt [log(dt)]
         dt_end:     the highest order of magnitude
