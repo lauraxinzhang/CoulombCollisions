@@ -191,36 +191,56 @@ class Coulomb():
 
             
     
-    def beam_EM(self,E, nparts, dt, tTot, fixedWiener = False):
+    def beam_EM(self,E, nparts, dt, tTot, snaps, fixedWiener = False):
         '''
         E:      energy of beam particles [eV]
         nparts: number of particles [#]
         tTot:   total time of simulation [s]
-        return: History of velocities (timesteps * nparts * 3)
+        snaps:  number of snapshots to output; set to '1' for only the initial and final states
+        fixedWiener: whether to use a fixed underlying Wiener process
+        return: [tHist, vHist] History of velocities (timesteps * nparts * 3) and the corresponding times
         '''
         
         
         if fixedWiener:
             self.fixedWiener(nparts, tTot)
-            #print('fixed wiener', series[1, :])
-#         else: 
-           # np.random.seed(0) # not a true random
             
         v_beam = np.sqrt(2*E*QE/self.ma)
         v = np.tile(np.array([v_beam, 0, 0]), (nparts, 1)) # initialize nparts particles with same velocity
         tnow = 0
-        vHist = np.array([v])
-        while tnow < tTot:
+        
+        # Some preparations so that we can modify vHist by index
+        stepsTotal = int(tTot/dt)
+        if stepsTotal < snaps:
+            snaps = stepsTotal
+        try:
+            dStep = int(stepsTotal / snaps)
+        except ZeroDivisionError:
+            print("snaps can't be 0, setting to 1 for outputtting the final state")
+            snaps = 1
+            dStep = int(stepsTotal)
+            
+        vHist = np.zeros((int(snaps+1), nparts, 3))
+        tHist = np.zeros((int(snaps+1),))
+        
+        for step in range(stepsTotal):
             dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
             #print(dW[:3, :])
             dv_s = self.dv_slow(dt, v)
             dv_diff = self.dv_diff_EM(dt, v, dW)
             v = v + dv_s + dv_diff
-            vHist = np.append(vHist,np.array([v]), axis = 0)
+            if (dStep != 0 and step % dStep == 0):
+                index = int(step / dStep)
+                vHist[index] = v
+                tHist[index] = tnow
             tnow += dt
-        return vHist
+        #Always keep the final state
+        vHist[-1] = v
+        tHist[-1] = tnow - dt
+        return tHist, vHist
     
-    def beam_MEM(self,E, nparts, dt, tTot, fixedWiener = False):
+    
+    def beam_MEM(self,E, nparts, dt, tTot, snaps, fixedWiener = False):
         '''
         E:      energy of beam particles [eV]
         nparts: number of particles [#]
@@ -229,22 +249,39 @@ class Coulomb():
         '''
         if fixedWiener:
             self.fixedWiener(nparts, tTot)
-            #print('fixed wiener')
-#         else: 
-           # np.random.seed(0) # not a true random
-        
+            
         v_beam = np.sqrt(2*E*QE/self.ma)
         v = np.tile(np.array([v_beam, 0, 0]), (nparts, 1)) # initialize nparts particles with same velocity
         tnow = 0
-        vHist = np.array([v])
-        while tnow < tTot:
+        
+        # Some preparations so that we can modify vHist by index
+        stepsTotal = int(tTot/dt)
+        if stepsTotal < snaps:
+            snaps = stepsTotal
+        try:
+            dStep = int(stepsTotal / snaps)
+        except ZeroDivisionError:
+            print("snaps can't be 0, setting to 1 for outputtting the final state")
+            snaps = 1
+            dStep = int(stepsTotal)
+            
+        vHist = np.zeros((int(snaps+1), nparts, 3))
+        tHist = np.zeros((int(snaps+1),))
+        
+        for step in range(stepsTotal):
             dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
             #if fixedWiener: print(dW)
             dv_s = self.dv_slow(dt, v)
             v = self.dv_diff_MEM(dt, v, dW) + dv_s
-            vHist = np.append(vHist,np.array([v]), axis = 0)
+            if (dStep != 0 and step % dStep == 0):
+                index = int(step / dStep)
+                vHist[index] = v
+                tHist[index] = tnow
             tnow += dt
-        return vHist
+        #Always keep the final state
+        vHist[-1] = v
+        tHist[-1] = tnow - dt
+        return tHist, vHist
     
     
     def energyConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, 
