@@ -284,49 +284,53 @@ class Coulomb():
         return tHist, vHist
     
     
-    def energyConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, 
+    def energyConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, moments = [1, 2],
                           integrator = 'EM', fixedWiener = False, silent = False):
         '''
-        Integrates the system over the same length of time, at different dt
-        
         nparts:     number of particles per run
         dt_start:   the lowest order of magnitude for dt [log(dt)]
         dt_end:     the highest order of magnitude
         t_tot:      Duration of each simulation
         numTrials:  Number of trials per dt
+        moments :   [int] Python list of central moments to calculate
         integrator: Method for integrating diffusion, 'EM' or 'MEM'
         '''
-        order = dt_start
-        dtList = np.array([])
-        meanList = np.array([])
-        varList = np.array([])
-        while order <= dt_end:
-            dt = 10**order
+        numT = int((dt_end - dt_start) / 0.2) # number of points in dt
+                
+        dtList = np.linspace(dt_end, dt_start, numT)
+        momList = np.zeros((numT, numTrials, len(moments), 1))
+        
+        for i in range(numT):
+            dt = 10**dtList[i]
             if not silent: print(dt)
-            i = 0
-            while i < numTrials:
+            trialList = np.zeros((numTrials, len(moments), 1))
+            for j in range(numTrials):
                 if fixedWiener:
                     self.dWt = None # flag a reset of the underlying Wiener
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    vHist = self.beam_EM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
-                    vHist = self.beam_MEM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
-                if not silent: print('done with trial', i)
-                speedHist = np.linalg.norm(vHist, axis = -1)**2
-                dtList = np.append(dtList, dt)
-                final = speedHist[len(speedHist)-1,:]
-                meanList = np.append(meanList, np.mean(final))
-                varList = np.append(varList, np.var(final))
-                i+=1
-            order+=0.2
-        return dtList, meanList, varList, speedHist[0, 0]
+                if not silent: print('done with trial', j)
+                    
+                speed = np.linalg.norm(vHist[-1], axis = -1)
+                momOut = np.zeros((len(moments), 1))
+                for orderIndex in range(len(moments)):
+                    order = moments[orderIndex]
+                    moment = stats.moment(speed, moment = order, axis = -1)
+                    momOut[orderIndex] = moment
+                trialList[j] = momOut
+            
+            momList[i] = trialList
+            dtList[i] = dt
+        return dtList, momList  
     
-    def pitchConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, 
+    def pitchConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, moments = [1, 2],
                          integrator = 'EM', fixedWiener = False, silent = False):
         '''
         nparts:     number of particles per run
@@ -334,53 +338,47 @@ class Coulomb():
         dt_end:     the highest order of magnitude
         t_tot:      Duration of each simulation
         numTrials:  Number of trials per dt
+        moments :   [int] Python list of central moments to calculate
         integrator: Method for integrating diffusion, 'EM' or 'MEM'
         '''
-        order = dt_start
-        dtList = np.array([0])
-        meanList = np.array([0, 0, 0])
-        varList = np.array([0, 0, 0])
-        pitch_meanList = np.array([0])
-        pitch_varList = np.array([0])
-        while order <= dt_end:
-            dt = 10**order
+        
+        numT = int((dt_end - dt_start) / 0.2) # number of points in dt
+                
+        dtList = np.linspace(dt_end, dt_start, numT)
+        momList = np.zeros((numT, numTrials, len(moments), 3))
+        
+        for i in range(numT):
+            dt = 10**dtList[i]
             if not silent: print(dt)
-            i = 0
-            while i < numTrials:
+            trialList = np.zeros((numTrials, len(moments), 3))
+            for j in range(numTrials):
                 if fixedWiener:
                     self.dWt = None # flag a reset of the underlying Wiener
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    vHist = self.beam_EM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
-                    vHist = self.beam_MEM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 else:
                     print('Integrator option not recognized: ', integrator)
-                    return 0, 0, 0, 0, 0, 0
-                if not silent: print('done with trial', i)
-                
-                dtList = np.append(dtList, dt)
-                
-                v_mean_final = np.mean(vHist[-1, :, :], axis = 0) # average over particles (3)
-                v_var_final = np.var(vHist[-1, :, :], axis = 0) # average over particles (3)
-
-                meanList = np.vstack((meanList, v_mean_final))
-                varList = np.vstack((varList, v_var_final))
-                
-                v_perp = np.sqrt(vHist[-1, :, 1]**2 + vHist[-1, :, 2]**2)
-                
-                pitch_mean = np.mean(v_perp / vHist[-1, :, 0], axis = 0)
-                pitch_var = np.var(v_perp / vHist[-1, :, 0], axis = 0)
-                
-                pitch_meanList = np.vstack((pitch_meanList, pitch_mean))
-                pitch_varList = np.vstack((pitch_varList, pitch_var))
-                i+=1
-            order+=0.2
-        return dtList, meanList, varList, pitch_meanList, pitch_varList, vHist[0, 0, :]
+                    return 0, 0, 0, 0
+                if not silent: print('done with trial', j)
+                    
+#                 speed = np.linalg.norm(vHist[-1], axis = -1)
+                momOut = np.zeros((len(moments), 3))
+                for orderIndex in range(len(moments)):
+                    order = moments[orderIndex]
+                    moment = stats.moment(vHist[-1], moment = order, axis = 0)
+                    momOut[orderIndex] = moment
+                trialList[j] = momOut
+            
+            momList[i] = trialList
+            dtList[i] = dt
+        return dtList, momList
 
     
-    def pitchIter(self, E, nparts, dt, i_start, i_end, di, numTrials, 
+    def pitchIter(self, E, nparts, dt, i_start, i_end, di, numTrials, moments = [1, 2],
                   integrator = 'EM', fixedWiener = False, silent = False):
         '''
         nparts:     number of particles per run
@@ -389,48 +387,38 @@ class Coulomb():
         i_end:      end number of iterations
         di:         step size in iterations
         numTrials:  Number of trials per i
+        moments :   [int] Python list of central moments to calculate
         integrator: Method for integrating diffusion, 'EM' or 'MEM'
         '''
-        iterNow = i_start
-        iList = np.array([0])
-        meanList = np.array([0, 0, 0])
-        varList = np.array([0, 0, 0])
-        pitch_meanList = np.array([0])
-        pitch_varList = np.array([0])
-        while iterNow <= i_end:
-            t_tot = dt * iterNow
+        numI = int((i_end - i_start)/di)
+        iList = np.linspace(i_start, i_end, numI)
+        momList = np.zeros((numI, numTrials, len(moments), 3))
+        for i in range(numI):
+            t_tot = dt * iList[i]
             if not silent: print('Pushing ',iterNow, 'iterations, for ', t_tot, 'seconds...')
-            i = 0
-            while i < numTrials:
+                
+            trialList = np.zeros((numTrials, len(moments), 3))
+            for j in range(numTrials):
                 if fixedWiener:
                     self.dWt = None # flag a reset of the underlying Wiener
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    vHist = self.beam_EM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
-                    vHist = self.beam_MEM(E, nparts, dt, t_tot, fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 else:
                     print('Integrator option not recognized: ', integrator)
-                    return 0, 0, 0, 0, 0, 0
-                if not silent: print('done with trial', i)
-                
-                iList = np.append(iList, iterNow)
-                
-                v_mean_final = np.mean(vHist[-1, :, :], axis = 0) # average over particles (3)
-                v_var_final = np.var(vHist[-1, :, :], axis = 0) # average over particles (3)
-
-                meanList = np.vstack((meanList, v_mean_final))
-                varList = np.vstack((varList, v_var_final))
-                
-                v_perp = np.sqrt(vHist[-1, :, 1]**2 + vHist[-1, :, 2]**2)
-                
-                pitch_mean = np.mean(v_perp / vHist[-1, :, 0], axis = 0)
-                pitch_var = np.var(v_perp / vHist[-1, :, 0], axis = 0)
-                
-                pitch_meanList = np.vstack((pitch_meanList, pitch_mean))
-                pitch_varList = np.vstack((pitch_varList, pitch_var))
-                i+=1
-                
-            iterNow += di
-        return iList[1:], meanList[1:, :], varList[1:, :], pitch_meanList[1:], pitch_varList[1:], vHist[0, 0, :]
+                    return 0, 0, 0, 0
+                if not silent: print('done with trial', j)
+                    
+                momOut = np.zeros((len(moments), 3))
+                for orderIndex in range(len(moments)):
+                    order = moments[orderIndex]
+                    moment = stats.moment(vHist[-1], moment = order, axis = 0)
+                    momOut[orderIndex] = moment
+                trialList[j] = momOut
+            
+            momList[i] = trialList
+#             iList[i] = dt
+        return iList, momList
