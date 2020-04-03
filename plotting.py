@@ -47,7 +47,7 @@ def formatAndSave(fig, ax, lines, xlabel, ylabel, legends = None, title = None, 
     if title != None:
         ax.set_title(title, fontsize = fontsize + 3)
     if filename != None:
-        fig.savefig(filename)
+        fig.savefig(filename, bbox_inches = "tight")
     
     
 def aveAndSTD(ax, vList, tTot, markers = '-', label = None):
@@ -64,8 +64,8 @@ def aveAndSTD(ax, vList, tTot, markers = '-', label = None):
     std = np.std(vList, axis = -1)
     
     avediff = (ave - ave[0]) / ave[0]
-    aveplus = (avediff + std) / ave[0]
-    aveminus = (avediff - std) / ave[0]
+    aveplus = avediff + std / ave[0]
+    aveminus = avediff - std / ave[0]
     
     time = np.linspace(0, tTot, vList.shape[0])
     
@@ -81,8 +81,8 @@ def vSpaceSnaps(ax, vHist, tslices, tTot):
     tslices [s]: a list of time slices to plot on
     tTot: total simulation time
     '''
-    plt.ticklabel_format(axis = 'x', style = 'sci', scilimits=(0, 0))
-    plt.ticklabel_format(axis = 'y', style = 'sci', scilimits=(0, 0))
+    plt.ticklabel_format(axis = 'x', style = 'sci', scilimits=(-2, 2), useMathText=True)
+    plt.ticklabel_format(axis = 'y', style = 'sci', scilimits=(-2, 0), useMathText=True)
     
     length = vHist.shape[0]
     dt = tTot/length

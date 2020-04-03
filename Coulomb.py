@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 from scipy import special
+from scipy import stats
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from datetime import datetime
@@ -79,6 +80,17 @@ class Coulomb():
             return -1 * dt * nus * v # forward Euler for deterministic slowing down
         else:
             return np.zeros(v.shape)
+    
+    def dv_strat(self, dt, v):
+        '''
+        returns the stratanovich correction to the SDE; to be used in EM method.
+        '''
+        nuperp = self.nu_perp(v)
+        speed = np.linalg.norm(v, axis = -1)
+        Dperp = speed**2 * (0.5 * nuperp)
+#         multiplier = Dperp / speed**2
+        mult = -0.5 * nuperp * dt
+        return mult[:, None] * v
     
     def dv_diff_EM(self, dt, v, dW):
         '''
@@ -191,12 +203,13 @@ class Coulomb():
 
             
     
-    def beam_EM(self,E, nparts, dt, tTot, snaps, fixedWiener = False):
+    def beam_EM(self,E, nparts, dt, tTot, snaps, strat = False, fixedWiener = False):
         '''
         E:      energy of beam particles [eV]
         nparts: number of particles [#]
         tTot:   total time of simulation [s]
         snaps:  number of snapshots to output; set to '1' for only the initial and final states
+        strat:  Whether to include the Stratanovich correction
         fixedWiener: whether to use a fixed underlying Wiener process
         return: [tHist, vHist] History of velocities (timesteps * nparts * 3) and the corresponding times
         '''
@@ -224,15 +237,19 @@ class Coulomb():
         tHist = np.zeros((int(snaps+1),))
         
         for step in range(stepsTotal):
-            dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
-            #print(dW[:3, :])
-            dv_s = self.dv_slow(dt, v)
-            dv_diff = self.dv_diff_EM(dt, v, dW)
-            v = v + dv_s + dv_diff
+
             if (dStep != 0 and step % dStep == 0):
                 index = int(step / dStep)
                 vHist[index] = v
                 tHist[index] = tnow
+                
+            dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
+            #print(dW[:3, :])
+            dv_s = self.dv_slow(dt, v)
+            dv_diff = self.dv_diff_EM(dt, v, dW)
+            dv_strat = self.dv_strat(dt, v) * strat
+            v = v + dv_s + dv_diff + dv_strat
+            
             tnow += dt
         #Always keep the final state
         vHist[-1] = v
@@ -269,14 +286,15 @@ class Coulomb():
         tHist = np.zeros((int(snaps+1),))
         
         for step in range(stepsTotal):
-            dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
-            #if fixedWiener: print(dW)
-            dv_s = self.dv_slow(dt, v)
-            v = self.dv_diff_MEM(dt, v, dW) + dv_s
             if (dStep != 0 and step % dStep == 0):
                 index = int(step / dStep)
                 vHist[index] = v
                 tHist[index] = tnow
+                
+            dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
+            #if fixedWiener: print(dW)
+            dv_s = self.dv_slow(dt, v)
+            v = self.dv_diff_MEM(dt, v, dW) + dv_s            
             tnow += dt
         #Always keep the final state
         vHist[-1] = v
