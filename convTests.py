@@ -2,6 +2,8 @@ from Coulomb import *
 from plotting import *
 import sys, getopt
 
+OUTDIR = 'output/'
+
 def main(argv):    
     try:
         opts, args = getopt.getopt(argv,"hw:s:",["help","weak=","strong="])
@@ -17,10 +19,21 @@ def main(argv):
             if arg in ('EM', 'MEM'):
                 method = arg
                 weakTest(method, args)
+            else:
+                print("integrator option not recognized: EM or MEM")
+                sys.exit()
         elif opt in ("-s", "--strong"):
             if arg in ('EM', 'MEM'):
                 method = arg
                 strongTest(method, args)
+            else:
+                print("integrator option not recognized: EM or MEM")
+                helpMessage()
+                sys.exit()
+        else:
+            print("option not recognized. \n")
+            helpMessage()
+    return
 
 def helpMessage():
     print('convTest.py -h \n', 
@@ -73,6 +86,7 @@ def weakTest(method, args):
     return
 
 def processAndWrite(t, err, fname):
+    fname = OUTDIR + fname
     err_ave = np.mean(err, axis = 0)
     err_err = stats.sem(err, axis = 0)
     np.savetxt(fname + '_ave.txt', err_ave)
