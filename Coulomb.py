@@ -3,7 +3,7 @@ import sys
 from scipy import special
 from scipy import stats
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# from mpl_toolkits.mplot3d import Axes3D
 from datetime import datetime
 
 ME=9.10938356E-31                       # electron mass, in kilogram
@@ -36,6 +36,9 @@ class Coulomb():
         
         self.dWt = None
         self.wiener = None
+        
+#         self.v_next = None # a placeholder for remembering the predictor velocities for predictor - corrector
+#         self.cor = None    # placeholder for MEM corrector order
         return
     
     def erf(self, x): 
@@ -102,8 +105,11 @@ class Coulomb():
         nupara = self.nu_par(v)
         nuperp = self.nu_perp(v)
         speed = np.linalg.norm(v, axis = -1)
-        Dpara_sqrt  = speed * np.sqrt(0.5 * nupara) * self.para
-        Dperp_sqrt = speed * np.sqrt(0.5 * nuperp) * self.perp
+#         Dpara_sqrt  = speed * np.sqrt(0.5 * nupara) * self.para
+#         Dperp_sqrt = speed * np.sqrt(0.5 * nuperp) * self.perp
+        Dpara_sqrt  = speed * np.sqrt(nupara) * self.para
+        Dperp_sqrt = speed * np.sqrt(nuperp) * self.perp
+
 #         Dperp_sqrt = Dperp_sqrt / Dperp_sqrt # setting diffusion coef to 1
         
         diag = np.identity(3)
@@ -125,7 +131,7 @@ class Coulomb():
         v3 = vector[2]
         return np.array([[0, -1*v3, v2], [v3, 0, -1 * v1], [-1*v2, v1, 0]])
     
-    def dv_diff_MEM(self, dt, v, dW):
+    def dv_diff_MEM(self, dt, v, dW, cor):
         '''
         returns the updated velocity from combined diffusive processes
         '''
@@ -135,24 +141,34 @@ class Coulomb():
         nuperp = self.nu_perp(v)
         
         speed = np.linalg.norm(v, axis = -1)
-        Dpara_sqrt  = speed * np.sqrt(0.5 * nupara) * self.para
-        Dperp_sqrt = speed * np.sqrt(0.5 * nuperp) * self.perp
+#         Dpara_sqrt  = speed * np.sqrt(0.5 * nupara) * self.para
+#         Dperp_sqrt = speed * np.sqrt(0.5 * nuperp) * self.perp
+        Dpara_sqrt  = speed * np.sqrt(nupara) * self.para
+        Dperp_sqrt = speed * np.sqrt(nuperp) * self.perp
         
         diag = np.identity(3)
         identities = np.tile(diag, (bs, 1)).reshape(bs, 3, 3)
         
-        omega = np.cross(v, dW)
-        omega_hat = np.apply_along_axis(self.hatMap, 1, omega)
-        
         T_const = 0.5 * (Dpara_sqrt - Dperp_sqrt)* (speed**-2)
 
-        T_n = T_const[:, None, None] * omega_hat
-        A = np.linalg.inv(identities - T_n)
-        B = Dpara_sqrt[:, None] * dW
-        C = np.squeeze(np.matmul((identities + T_n), np.expand_dims(v, axis = -1)))
-        RHS = np.expand_dims(B + C, axis = -1)
-        result = np.squeeze(np.matmul(A, RHS))
-        return result
+        v_next = v
+        for order in range(cor+1):
+            v_half = 0.5 * (v + v_next)
+            omega = np.cross(v_half, dW)
+            
+            omega_hat = np.apply_along_axis(self.hatMap, 1, omega)
+
+
+            T_n = T_const[:, None, None] * omega_hat
+            A = np.linalg.inv(identities - T_n)
+            B = Dpara_sqrt[:, None] * dW
+            C = np.squeeze(np.matmul((identities + T_n), np.expand_dims(v, axis = -1)))
+            RHS = np.expand_dims(B + C, axis = -1)
+            v_new = np.squeeze(np.matmul(A, RHS))
+#             print('{}th correction: '.format(order), v_new - v_next)
+            v_next = v_new
+            
+        return v_next
     
     def fixedWiener(self, nparts, tTot):
         '''
@@ -192,16 +208,13 @@ class Coulomb():
             iNext = int(tNext/ self.dWt)
                 
             try:
-                delta_W = self.wiener[iNext, :,:] - self.wiener[iNow, :,:] # (nparts x 3)
-#                 return np.tile(delta_W, (bs, 1)) # return the same wiener process for each sample path
+                delta_W = np.sum(self.wiener[iNow : iNext + 1], axis = 0)
                 return delta_W
             
             except IndexError:
                 print("Error: Trying to reach beyond prepared underlying Wiener process. Adjust Ttot.")
                 sys.exit(1)
-                
-
-            
+                            
     
     def beam_EM(self,E, nparts, dt, tTot, snaps, strat = False, fixedWiener = False):
         '''
@@ -244,7 +257,7 @@ class Coulomb():
                 tHist[index] = tnow
                 
             dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
-            #print(dW[:3, :])
+#             print(dW[:3, :])
             dv_s = self.dv_slow(dt, v)
             dv_diff = self.dv_diff_EM(dt, v, dW)
             dv_strat = self.dv_strat(dt, v) * strat
@@ -253,11 +266,11 @@ class Coulomb():
             tnow += dt
         #Always keep the final state
         vHist[-1] = v
-        tHist[-1] = tnow - dt
+        tHist[-1] = tnow
         return tHist, vHist
     
     
-    def beam_MEM(self,E, nparts, dt, tTot, snaps, fixedWiener = False):
+    def beam_MEM(self,E, nparts, dt, tTot, snaps, correctors = 1, fixedWiener = False):
         '''
         E:      energy of beam particles [eV]
         nparts: number of particles [#]
@@ -266,6 +279,7 @@ class Coulomb():
         '''
         if fixedWiener:
             self.fixedWiener(nparts, tTot)
+#         self.cor = correctors
             
         v_beam = np.sqrt(2*E*QE/self.ma)
         v = np.tile(np.array([v_beam, 0, 0]), (nparts, 1)) # initialize nparts particles with same velocity
@@ -286,19 +300,30 @@ class Coulomb():
         tHist = np.zeros((int(snaps+1),))
         
         for step in range(stepsTotal):
+            if correctors != 0:
+                self.v_prev = v
+                
             if (dStep != 0 and step % dStep == 0):
                 index = int(step / dStep)
                 vHist[index] = v
                 tHist[index] = tnow
                 
+                
             dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
             #if fixedWiener: print(dW)
             dv_s = self.dv_slow(dt, v)
-            v = self.dv_diff_MEM(dt, v, dW) + dv_s            
+            v_diff = self.dv_diff_MEM(dt, v, dW, correctors) 
+            
+            
+#             for cor in range(correctors):
+#                 self.v_next = v_diff #predictor
+#                 v_diff = self.dv_diff_MEM(dt, v, dW)  # recalculate with corrected midpoint
+            
+            v = v_diff + dv_s
             tnow += dt
         #Always keep the final state
         vHist[-1] = v
-        tHist[-1] = tnow - dt
+        tHist[-1] = tnow
         return tHist, vHist
     
     
@@ -328,7 +353,7 @@ class Coulomb():
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
                     tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
                 else:
@@ -340,7 +365,12 @@ class Coulomb():
                 momOut = np.zeros((len(moments), 1))
                 for orderIndex in range(len(moments)):
                     order = moments[orderIndex]
-                    moment = stats.moment(speed, moment = order, axis = -1)
+                    if order == 1:
+                        moment = np.mean(vHist[-1], axis = 0)
+                    elif order == 2:
+                        moment = np.var(vHist[-1], axis = 0)
+                    else:
+                        moment = stats.moment(vHist[-1], moment = order, axis = 0)
                     momOut[orderIndex] = moment
                 trialList[j] = momOut
             
@@ -348,8 +378,9 @@ class Coulomb():
             dtList[i] = dt
         return dtList, momList  
     
-    def pitchConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, moments = [1, 2],
-                         integrator = 'EM', fixedWiener = False, silent = False):
+    def pitchConvergence(self, E, nparts, numT, t_tot, numTrials, moments = [1, 2],
+                         integrator = 'EM', correctors = None,
+                         fixedWiener = False, silent = False):
         '''
         nparts:     number of particles per run
         dt_start:   the lowest order of magnitude for dt [log(dt)]
@@ -360,13 +391,15 @@ class Coulomb():
         integrator: Method for integrating diffusion, 'EM' or 'MEM'
         '''
         
-        numT = int((dt_end - dt_start) / 0.2) # number of points in dt
+#         numT = int((dt_end - dt_start) / 0.2) # number of points in dt
                 
-        dtList = np.linspace(dt_end, dt_start, numT)
+#         dtList = np.linspace(dt_end, dt_start, numT)
+        dtReal = np.zeros(numT)
         momList = np.zeros((numT, numTrials, len(moments), 3))
         
         for i in range(numT):
-            dt = 10**dtList[i]
+#             dt = 10**dtList[i]
+            dt = t_tot / (4**i)
             if not silent: print(dt)
             trialList = np.zeros((numTrials, len(moments), 3))
             for j in range(numTrials):
@@ -375,9 +408,10 @@ class Coulomb():
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
-                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, correctors = correctors, 
+                                                 fixedWiener = fixedWiener)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
@@ -387,17 +421,23 @@ class Coulomb():
                 momOut = np.zeros((len(moments), 3))
                 for orderIndex in range(len(moments)):
                     order = moments[orderIndex]
-                    moment = stats.moment(vHist[-1], moment = order, axis = 0)
+                    if order == 1:
+                        moment = np.mean(vHist[-1], axis = 0)
+                    elif order == 2:
+                        moment = np.var(vHist[-1], axis = 0)
+                    else:
+                        moment = stats.moment(vHist[-1], moment = order, axis = 0)
                     momOut[orderIndex] = moment
                 trialList[j] = momOut
             
             momList[i] = trialList
-            dtList[i] = dt
-        return dtList, momList
+            dtReal[i] = dt
+        return dtReal, momList
 
     
     def pitchIter(self, E, nparts, dt, i_start, i_end, di, numTrials, moments = [1, 2],
-                  integrator = 'EM', fixedWiener = False, silent = False):
+                  integrator = 'EM', correctors = None,
+                  fixedWiener = False, silent = False):
         '''
         nparts:     number of particles per run
         dt:         time step [s]
@@ -422,9 +462,10 @@ class Coulomb():
                     np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
                 elif integrator == 'MEM':
-                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, correctors = correctors, 
+                                                 fixedWiener = fixedWiener)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
@@ -433,10 +474,63 @@ class Coulomb():
                 momOut = np.zeros((len(moments), 3))
                 for orderIndex in range(len(moments)):
                     order = moments[orderIndex]
-                    moment = stats.moment(vHist[-1], moment = order, axis = 0)
+                    if order == 1:
+                        moment = np.mean(vHist[-1], axis = 0)
+                    elif order == 2:
+                        moment = np.var(vHist[-1], axis = 0)
+                    else:
+                        moment = stats.moment(vHist[-1], moment = order, axis = 0)
                     momOut[orderIndex] = moment
                 trialList[j] = momOut
             
             momList[i] = trialList
 #             iList[i] = dt
         return iList, momList
+
+
+    def strongConv(self, E, npaths, numT, t_tot, 
+                             integrator = 'EM', correctors = None, silent = False):
+        '''
+        E:          Energy of beam (eV)
+        npaths:     number of sample paths
+        numT:       Number of times to divide t_tot by 4 (number of time steps)
+        t_tot:      Duration of each simulation
+        integrator: Method for integrating diffusion, 'EM' or 'MEM'
+        correctors: Order of corrector for MEM
+        '''
+#         numT = int((dt_end - dt_start) / 0.2) # number of points in dt
+                
+#         dtList = np.linspace(dt_end, dt_start, numT)
+#         numT = l
+        dtReal = np.zeros(numT)
+        errList = np.zeros((npaths, numT - 1, 3))
+        
+        for i in range(npaths):
+            self.dWt = None # flag a reset of the underlying Wiener
+            trialList = np.zeros((numT, 3))
+            for j in range(numT):
+#                 dt = 10**dtList[j]
+                dt = t_tot / (4**j)
+                if not silent: print(dt)
+                
+                if integrator == 'EM':
+                    tHist, vHist = self.beam_EM(E, 1, dt, t_tot, snaps = 2, strat = True, fixedWiener = True)
+                elif integrator == 'MEM':
+                    tHist, vHist = self.beam_MEM(E, 1, dt, t_tot, snaps = 2, correctors = correctors, 
+                                                 fixedWiener = True)
+                else:
+                    print('Integrator option not recognized: ', integrator)
+                    return 0, 0, 0, 0
+                if not silent: print('done with trial', j)
+                    
+                trialList[j] = np.squeeze(vHist)[-1]
+#                 print(j, trialList)
+                dtReal[j] = dt
+                
+            errList[i] = np.abs(np.diff(trialList, axis = 0))
+            if not silent: print('done with sample path', i)
+#             print(trialList)
+#             errList[i] = trialList
+        dtReal = dtReal[:-1]
+#         dtReal = np.abs(np.diff(dtReal))
+        return dtReal, errList
