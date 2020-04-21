@@ -170,7 +170,7 @@ class Coulomb():
             
         return v_next
     
-    def fixedWiener(self, nparts, tTot):
+    def fixedWiener(self, nparts, dt, tTot):
         '''
         Generate a fixed fine-grain Wiener process, pass to class members
         Note: This gauranteed that for each class instantiation, the 'fixed' underlying
@@ -178,7 +178,7 @@ class Coulomb():
         '''
 #         np.random.seed(0)
         if self.dWt == None:
-            self.dWt = tTot * 1E-5
+            self.dWt = dt * 1E-4
             length = int(tTot/self.dWt) *2
             mean = [0, 0, 0]
             var = np.eye(3) * self.dWt
@@ -229,7 +229,7 @@ class Coulomb():
         
         
         if fixedWiener:
-            self.fixedWiener(nparts, tTot)
+            self.fixedWiener(nparts, dt, tTot)
             
         v_beam = np.sqrt(2*E*QE/self.ma)
         v = np.tile(np.array([v_beam, 0, 0]), (nparts, 1)) # initialize nparts particles with same velocity
@@ -278,7 +278,7 @@ class Coulomb():
         return: History of velocities (timesteps * nparts * 3)
         '''
         if fixedWiener:
-            self.fixedWiener(nparts, tTot)
+            self.fixedWiener(nparts, dt, tTot)
 #         self.cor = correctors
             
         v_beam = np.sqrt(2*E*QE/self.ma)
@@ -503,14 +503,17 @@ class Coulomb():
 #         dtList = np.linspace(dt_end, dt_start, numT)
 #         numT = l
         dtReal = np.zeros(numT)
-        errList = np.zeros((npaths, numT - 1, 3))
+#         errList = np.zeros((npaths, numT - 1, 3))
+        errList = np.zeros((npaths, numT, 3))
+        lList = np.arange(numT)
         
         for i in range(npaths):
             self.dWt = None # flag a reset of the underlying Wiener
             trialList = np.zeros((numT, 3))
-            for j in range(numT):
+#             for j in range(numT):
+            for j in np.flip(lList):
 #                 dt = 10**dtList[j]
-                dt = t_tot / (4**j)
+                dt = t_tot / (2**j)
                 if not silent: print(dt)
                 
                 if integrator == 'EM':
@@ -527,10 +530,10 @@ class Coulomb():
 #                 print(j, trialList)
                 dtReal[j] = dt
                 
-            errList[i] = np.abs(np.diff(trialList, axis = 0))
+#             errList[i] = np.abs(np.diff(trialList, axis = 0))
             if not silent: print('done with sample path', i)
 #             print(trialList)
-#             errList[i] = trialList
-        dtReal = dtReal[:-1]
+            errList[i] = trialList
+#         dtReal = dtReal[:-1]
 #         dtReal = np.abs(np.diff(dtReal))
         return dtReal, errList
