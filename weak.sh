@@ -11,12 +11,12 @@
 #SBATCH --mail-type=START,END,FAIL # notifications for job done & fail
 #SBATCH --mail-user=xzhang@pppl.gov # send-to address
 
-NPART=1024
+NPART=2048
 L=8
 TRIALS=32
 
 python convTests.py -w EM $NPART $L 0.1 $TRIALS 0
-for cor in 0 1
+for cor in 0 1 2 5
 do
     python convTests.py -w MEM $NPART $L 0.1 $TRIALS $cor
 done
