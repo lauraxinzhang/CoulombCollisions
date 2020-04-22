@@ -93,9 +93,9 @@ class Coulomb():
         '''
         nuperp = self.nu_perp(v)
         speed = np.linalg.norm(v, axis = -1)
-        Dperp = speed**2 * (0.5 * nuperp)
-#         multiplier = Dperp / speed**2
-        mult = -0.5 * nuperp * dt
+#         mult = -0.5 * nuperp * dt
+        mult = -1 * nuperp * dt
+
         return mult[:, None] * v
     
     def dv_diff_EM(self, dt, v, dW):
@@ -233,7 +233,7 @@ class Coulomb():
                 sys.exit(1)
                             
     
-    def beam_EM(self,E, nparts, dt, tTot, snaps, strat = False, fixedWiener = False):
+    def beam_EM(self,E, nparts, dt, tTot, snaps, strat = True, fixedWiener = False):
         '''
         E:      energy of beam particles [eV]
         nparts: number of particles [#]
