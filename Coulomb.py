@@ -5,6 +5,9 @@ from scipy import stats
 import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 from datetime import datetime
+import time
+
+from KarhunenLoeve import * # For a smooth representation of a Wiener process
 
 ME=9.10938356E-31                       # electron mass, in kilogram
 MI=1.6726219E-27                 # ion mass, in kilogram
@@ -35,7 +38,7 @@ class Coulomb():
         self.perp = perp
         
         self.dWt = None
-        self.wiener = None
+        self.kl = None
         
 #         self.v_next = None # a placeholder for remembering the predictor velocities for predictor - corrector
 #         self.cor = None    # placeholder for MEM corrector order
@@ -170,21 +173,27 @@ class Coulomb():
             
         return v_next
     
-    def fixedWiener(self, nparts, dt, tTot):
+    def fixedWiener(self, tTot, seed = 0.0):
         '''
         Generate a fixed fine-grain Wiener process, pass to class members
         Note: This gauranteed that for each class instantiation, the 'fixed' underlying
                 Wiener process is defined only one time.
         '''
-#         np.random.seed(0)
-        if self.dWt == None:
+#         if self.dWt == None:
+        if False: # the discrete representation is deprecated
             self.dWt = dt * 1E-4
             length = int(tTot/self.dWt) *2
             mean = [0, 0, 0]
             var = np.eye(3) * self.dWt
             self.wiener = np.random.multivariate_normal(mean, var, (length,nparts))
-#             print(self.wiener.shape)
+        
+        self.kl = KarhunenLoeve(tTot, seeded = True, seed = seed)
         return
+
+#     def KLWiener(self, dt, tTot):
+#         self.kl = KarhunenLoeve(tTot)
+#         return
+        
         
     
     def wienerProcess(self, dt, bs, fixedWiener = False, tNow = None):
@@ -204,15 +213,23 @@ class Coulomb():
         else:
             #print('fixed')
             tNext = tNow + dt
-            iNow  = int(tNow / self.dWt)
-            iNext = int(tNext/ self.dWt)
-                
+#             iNow  = int(tNow / self.dWt)
+#             iNext = int(tNext/ self.dWt)
+            if bs != 1:
+                print("Why are you using more than 1 particle for 1 fixed sample path?? I refuse.")
+                sys.exit(1)
             try:
-                delta_W = np.sum(self.wiener[iNow : iNext + 1], axis = 0)
-                return delta_W
+#                 delta_W = np.sum(self.wiener[iNow : iNext + 1], axis = 0)
+#                 return delta_W
+                tList = np.array([tNow, tNext])
+                W = self.kl.W(tList) # 2 tpoints x 3 vcomp
+                return np.diff(W, axis = 0) # 1 x 3 vcomp
             
-            except IndexError:
-                print("Error: Trying to reach beyond prepared underlying Wiener process. Adjust Ttot.")
+#             except IndexError:
+#                 print("Error: Trying to reach beyond prepared underlying Wiener process. Adjust Ttot.")
+#                 sys.exit(1)
+            except AttributeError:
+                print("KL series hasn't been initialized")
                 sys.exit(1)
                             
     
@@ -228,8 +245,8 @@ class Coulomb():
         '''
         
         
-        if fixedWiener:
-            self.fixedWiener(nparts, dt, tTot)
+#         if fixedWiener:
+#             self.fixedWiener(nparts, dt, tTot)
             
         v_beam = np.sqrt(2*E*QE/self.ma)
         v = np.tile(np.array([v_beam, 0, 0]), (nparts, 1)) # initialize nparts particles with same velocity
@@ -277,8 +294,8 @@ class Coulomb():
         tTot:   total time of simulation [s]
         return: History of velocities (timesteps * nparts * 3)
         '''
-        if fixedWiener:
-            self.fixedWiener(nparts, dt, tTot)
+#         if fixedWiener:
+#             self.fixedWiener(nparts, dt, tTot)
 #         self.cor = correctors
             
         v_beam = np.sqrt(2*E*QE/self.ma)
@@ -300,8 +317,8 @@ class Coulomb():
         tHist = np.zeros((int(snaps+1),))
         
         for step in range(stepsTotal):
-            if correctors != 0:
-                self.v_prev = v
+#             if correctors != 0:
+#                 self.v_prev = v
                 
             if (dStep != 0 and step % dStep == 0):
                 index = int(step / dStep)
@@ -312,13 +329,7 @@ class Coulomb():
             dW = self.wienerProcess(dt, nparts, fixedWiener, tnow)
             #if fixedWiener: print(dW)
             dv_s = self.dv_slow(dt, v)
-            v_diff = self.dv_diff_MEM(dt, v, dW, correctors) 
-            
-            
-#             for cor in range(correctors):
-#                 self.v_next = v_diff #predictor
-#                 v_diff = self.dv_diff_MEM(dt, v, dW)  # recalculate with corrected midpoint
-            
+            v_diff = self.dv_diff_MEM(dt, v, dW, correctors)             
             v = v_diff + dv_s
             tnow += dt
         #Always keep the final state
@@ -328,7 +339,7 @@ class Coulomb():
     
     
     def energyConvergence(self, E, nparts, dt_start, dt_end, t_tot, numTrials, moments = [1, 2],
-                          integrator = 'EM', fixedWiener = False, silent = False):
+                          integrator = 'EM', silent = False):
         '''
         nparts:     number of particles per run
         dt_start:   the lowest order of magnitude for dt [log(dt)]
@@ -348,14 +359,11 @@ class Coulomb():
             if not silent: print(dt)
             trialList = np.zeros((numTrials, len(moments), 1))
             for j in range(numTrials):
-                if fixedWiener:
-                    self.dWt = None # flag a reset of the underlying Wiener
-                    np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = False)
                 elif integrator == 'MEM':
-                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, fixedWiener = False)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
@@ -380,7 +388,7 @@ class Coulomb():
     
     def pitchConvergence(self, E, nparts, numT, t_tot, numTrials, moments = [1, 2],
                          integrator = 'EM', correctors = None,
-                         fixedWiener = False, silent = False):
+                         silent = False):
         '''
         nparts:     number of particles per run
         dt_start:   the lowest order of magnitude for dt [log(dt)]
@@ -403,15 +411,12 @@ class Coulomb():
             if not silent: print(dt)
             trialList = np.zeros((numTrials, len(moments), 3))
             for j in range(numTrials):
-                if fixedWiener:
-                    self.dWt = None # flag a reset of the underlying Wiener
-                    np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = False)
                 elif integrator == 'MEM':
                     tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, correctors = correctors, 
-                                                 fixedWiener = fixedWiener)
+                                                 fixedWiener = False)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
@@ -437,7 +442,7 @@ class Coulomb():
     
     def pitchIter(self, E, nparts, dt, i_start, i_end, di, numTrials, moments = [1, 2],
                   integrator = 'EM', correctors = None,
-                  fixedWiener = False, silent = False):
+                  silent = False):
         '''
         nparts:     number of particles per run
         dt:         time step [s]
@@ -457,15 +462,12 @@ class Coulomb():
                 
             trialList = np.zeros((numTrials, len(moments), 3))
             for j in range(numTrials):
-                if fixedWiener:
-                    self.dWt = None # flag a reset of the underlying Wiener
-                    np.random.seed(i) # use the same states of random numbers for each dt
                     
                 if integrator == 'EM':
-                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = fixedWiener)
+                    tHist, vHist = self.beam_EM(E, nparts, dt, t_tot, snaps = 2, strat = True, fixedWiener = False)
                 elif integrator == 'MEM':
                     tHist, vHist = self.beam_MEM(E, nparts, dt, t_tot, snaps = 2, correctors = correctors, 
-                                                 fixedWiener = fixedWiener)
+                                                 fixedWiener = False)
                 else:
                     print('Integrator option not recognized: ', integrator)
                     return 0, 0, 0, 0
@@ -508,7 +510,8 @@ class Coulomb():
         lList = np.arange(numT)
         
         for i in range(npaths):
-            self.dWt = None # flag a reset of the underlying Wiener
+#             self.dWt = None # flag a reset of the underlying Wiener
+            self.fixedWiener(t_tot, seed = int(time.time()) )
             trialList = np.zeros((numT, 3))
 #             for j in range(numT):
             for j in np.flip(lList):
