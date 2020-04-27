@@ -50,7 +50,7 @@ def formatAndSave(fig, ax, lines, xlabel, ylabel, legends = None, title = None, 
         fig.savefig(filename, bbox_inches = "tight")
     
     
-def aveAndSTD(ax, vList, tTot, markers = '-', label = None):
+def aveAndSTD(ax, vList, tTot, markers = '-', c = None, label = None):
     '''
     Plots the mean +- std of vList
     ax: axes to plot on
@@ -69,8 +69,8 @@ def aveAndSTD(ax, vList, tTot, markers = '-', label = None):
     
     time = np.linspace(0, tTot, vList.shape[0])
     
-    lines = ax.plot(time, avediff, markers, label = label)
-    ax.fill_between(time, aveminus, aveplus, alpha = 0.2)
+    lines = ax.plot(time, avediff, markers, color = c, label = label)
+    ax.fill_between(time, aveminus, aveplus, color = c, alpha = 0.2)
     return lines
 
 def vSpaceSnaps(ax, vHist, tslices, tTot):
