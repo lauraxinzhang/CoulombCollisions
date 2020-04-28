@@ -1,0 +1,1 @@
+2048 particles, base 4 in l, 32 batches per time step. levels = 8 (7 for MEM5).

@@ -15,6 +15,7 @@ QE=1.60217662E-19                # elementary charge, in coulomb
 EPSILON0=8.8541878128E-12
 
 LOGLAMBDA = 19
+LBASE = 3
 
 class Coulomb():
    
@@ -407,7 +408,7 @@ class Coulomb():
         
         for i in range(numT):
 #             dt = 10**dtList[i]
-            dt = t_tot / (4**i)
+            dt = t_tot / (LBASE**i)
             if not silent: print(dt)
             trialList = np.zeros((numTrials, len(moments), 3))
             for j in range(numTrials):
@@ -516,7 +517,7 @@ class Coulomb():
 #             for j in range(numT):
             for j in np.flip(lList):
 #                 dt = 10**dtList[j]
-                dt = t_tot / (2**j)
+                dt = t_tot / (LBASE**j)
                 if not silent: print(dt)
                 
                 if integrator == 'EM':
