@@ -2,7 +2,7 @@ from Coulomb import *
 from plotting import *
 import sys, getopt
 
-OUTDIR = 'output/base2'
+OUTDIR = 'output/base2/small/'
 
 def main(argv):    
     try:

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=weakConvergence
+#SBATCH --job-name=weakEM0
 
 
 #SBATCH -N 4 # number of nodes
@@ -15,8 +15,8 @@ NPART=1024
 L=9
 TRIALS=32
 
-#python convTests.py -w EM $NPART $L 0.1 $TRIALS 0
-for cor in 5
+python convTests.py -w EM $NPART $L 0.1 $TRIALS 0
+for cor in 0
 do
     python convTests.py -w MEM $NPART $L 0.1 $TRIALS $cor
 done

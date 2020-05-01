@@ -15,7 +15,7 @@ QE=1.60217662E-19                # elementary charge, in coulomb
 EPSILON0=8.8541878128E-12
 
 LOGLAMBDA = 19
-LBASE = 3
+LBASE = 2
 
 class Coulomb():
    
