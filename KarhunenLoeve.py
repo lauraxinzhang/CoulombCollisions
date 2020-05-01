@@ -33,7 +33,7 @@ class KarhunenLoeve():
         mean = np.array([0, 0, 0])
         cov = np.eye(3)
         if np.sum(self.Zn) != None: # if this is not being called by the constructor
-            print("Warning: Zn has been reset.")
+#            print("Warning: Zn has been reset.")
         self.Zn = np.random.multivariate_normal(mean, cov, size = (self.N)) # N by 3        
         return
     
@@ -80,7 +80,7 @@ class KarhunenLoeve():
         if dtmin < dtLimit * KLSEP :
             period_r = dtmin / KLSEP # request a new period that's 50 times the minimum dt
             self.resetN(self.order(period_r))
-            print("order of Fourier series adjusted to {}.".format(self.N))
+ #           print("order of Fourier series adjusted to {}.".format(self.N))
             
         phi = self.phi(t) # N by size(t)
         Zn = self.Zn # N by 3

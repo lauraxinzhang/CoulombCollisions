@@ -408,7 +408,7 @@ class Coulomb():
         
         for i in range(numT):
 #             dt = 10**dtList[i]
-            dt = t_tot / (LBASE**i)
+            dt = t_tot / (LBASE**(i+2))
             if not silent: print(dt)
             trialList = np.zeros((numTrials, len(moments), 3))
             for j in range(numTrials):
@@ -517,7 +517,7 @@ class Coulomb():
 #             for j in range(numT):
             for j in np.flip(lList):
 #                 dt = 10**dtList[j]
-                dt = t_tot / (LBASE**j)
+                dt = t_tot / (LBASE**(j+2))
                 if not silent: print(dt)
                 
                 if integrator == 'EM':
