@@ -2,6 +2,7 @@ from Coulomb import *
 from plotting import *
 import sys, getopt
 
+
 OUTDIR = 'output/base2/low/'
 
 def main(argv):    
