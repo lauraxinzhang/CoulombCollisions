@@ -1,0 +1,4 @@
+strong:
+512 particles each, L = 9 levels, tTot = 0.01s
+weak:
+8096 particles each, L = 10 levels, tTot = 0.01s, 32 batches
