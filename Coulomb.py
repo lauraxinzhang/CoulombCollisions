@@ -506,8 +506,8 @@ class Coulomb():
 #         dtList = np.linspace(dt_end, dt_start, numT)
 #         numT = l
         dtReal = np.zeros(numT)
-#         errList = np.zeros((npaths, numT - 1, 3))
-        errList = np.zeros((npaths, numT, 3))
+        errList = np.zeros((npaths, numT - 1, 3))
+#        errList = np.zeros((npaths, numT, 3))
         lList = np.arange(numT)
         
         for i in range(npaths):
@@ -534,10 +534,10 @@ class Coulomb():
 #                 print(j, trialList)
                 dtReal[j] = dt
                 
-#             errList[i] = np.abs(np.diff(trialList, axis = 0))
+            errList[i] = np.abs(np.diff(trialList, axis = 0))
             if not silent: print('done with sample path', i)
 #             print(trialList)
-            errList[i] = trialList
-#         dtReal = dtReal[:-1]
+            #errList[i] = trialList
+        dtReal = 0.5 * (dtReal[:-1] + dtReal[1:])
 #         dtReal = np.abs(np.diff(dtReal))
         return dtReal, errList
