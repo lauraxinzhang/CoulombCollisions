@@ -1,6 +1,7 @@
 #!/bin/bash
 
-#SBATCH --job-name=weak
+
+#SBATCH --job-name=weakEM
 
 #SBATCH -n 64 # number of cores
 
@@ -10,13 +11,9 @@
 #SBATCH --mail-user=xzhang@pppl.gov # send-to address
 
 source activate coulomb
-
 NPART=8192
 L=7
 TRIALS=32
 TTOT=0.1
 
-#ORDER=5
-#python convTests.py -w EM $NPART $L $TTOT $TRIALS 0
-python convTests.py -w MEM $NPART $L $TTOT $TRIALS $ORDER
-
+python convTests.py -w EM $NPART $L $TTOT $TRIALS 0
