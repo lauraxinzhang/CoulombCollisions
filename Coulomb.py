@@ -540,4 +540,4 @@ class Coulomb():
             errAbs[i] = trialList
         dtReal = 0.5 * (dtReal[:-1] + dtReal[1:])
 #         dtReal = np.abs(np.diff(dtReal))
-        return dtReal, errList/errAbs[:-1]
+        return dtReal, errList/errAbs[:, :-1, :]
