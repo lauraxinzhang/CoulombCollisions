@@ -17,9 +17,5 @@ L=9
 TRIALS=0
 TTOT=0.01
 
-#python convTests.py -s EM $NPART $L $TTOT 0
-for cor in 5
-do
-    python convTests.py -s MEM $NPART $L $TTOT $cor
-done
+python convTests.py -s MEM $NPART $L $TTOT $ORDER
 

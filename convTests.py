@@ -3,7 +3,7 @@ from plotting import *
 import sys, getopt
 
 
-OUTDIR = 'output/base2/large/'
+OUTDIR = 'output/base2/million/'
 
 def main(argv):    
     try:
