@@ -13,7 +13,7 @@ source activate coulomb
 
 NPART=8192
 L=7
-TRIALS=128
+TRIALS=1024
 TTOT=0.1
 ORDER=0
 
